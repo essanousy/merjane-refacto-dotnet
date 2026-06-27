@@ -3,19 +3,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Refacto.DotNet.Controllers.Database.Context;
+using Refacto.DotNet.Controllers.Dtos.Product;
 using Refacto.DotNet.Controllers.Entities;
-using Refacto.DotNet.Controllers.Services;
+using Refacto.DotNet.Controllers.Services.Contracts;
+using System.Net.Http.Json;
 
 namespace Refacto.Dotnet.Controllers.Tests.Controllers
 {
     [Collection("Sequential")]
-    public class MyControllerIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+    public class OrdersControllerIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
     {
         private readonly WebApplicationFactory<Program> _factory;
         private readonly AppDbContext _context;
         private readonly Mock<INotificationService> _mockNotificationService;
 
-        public MyControllerIntegrationTests(WebApplicationFactory<Program> factory)
+        public OrdersControllerIntegrationTests(WebApplicationFactory<Program> factory)
         {
             _mockNotificationService = new Mock<INotificationService>();
 
@@ -65,8 +67,22 @@ namespace Refacto.Dotnet.Controllers.Tests.Controllers
             HttpResponseMessage response = await client.PostAsync($"/orders/{order.Id}/processOrder", null);
             _ = response.EnsureSuccessStatusCode();
 
+            ProcessOrderResponse? payload = await response.Content.ReadFromJsonAsync<ProcessOrderResponse>();
+            Assert.NotNull(payload);
+            Assert.Equal(order.Id, payload.id);
+
             Order? resultOrder = await _context.Orders.FindAsync(order.Id);
+            Assert.NotNull(resultOrder);
             Assert.Equal(resultOrder.Id, order.Id);
+        }
+
+        [Fact]
+        public async Task ProcessOrderShouldNotBeFound()
+        {
+            HttpClient client = _factory.CreateClient(); 
+            var orderId = 0;
+            HttpResponseMessage response = await client.PostAsync($"/orders/{orderId}/processOrder", null);
+            Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
         }
 
         private static Order CreateOrder(HashSet<Product> products)
